@@ -150,14 +150,19 @@ def main(argv=None):
     # row centerlines: peaks of the across-row canopy profile
     edges = np.arange(across.min() - res, across.max() + 2 * res, res)
     prof = np.histogram(across, bins=edges)[0].astype(float)
-    prof = ndimage.gaussian_filter1d(
-        prof, sigma=max(1.0, 0.15 * args.row_spacing / res)
-    )
+    sigma = max(1.0, 0.15 * args.row_spacing / res)
+    # pad with empty bins so a row at the edge of the canopy extent is an
+    # interior peak after smoothing; find_peaks cannot return the first or
+    # last sample
+    pad = int(3 * sigma) + 1
+    prof = ndimage.gaussian_filter1d(np.pad(prof, pad), sigma=sigma)
     peaks, _ = find_peaks(
         prof,
         distance=max(1, int(0.6 * args.row_spacing / res)),
         height=prof.max() * 0.08,
     )
+    peaks = peaks - pad
+    peaks = peaks[(peaks >= 0) & (peaks < len(edges) - 1)]
     row_pos = 0.5 * (edges[peaks] + edges[peaks + 1])
     LOG.info(
         "%d rows found; spacing median %.2f m",
@@ -179,15 +184,17 @@ def main(argv=None):
         # along-row profile weighted by height, so a tall crown dominates
         # the low grass around it
         p2 = np.histogram(a, bins=e2, weights=hh)[0]
-        p2 = ndimage.gaussian_filter1d(
-            p2, sigma=max(1.0, 0.2 * args.min_spacing / res)
-        )
+        sig2 = max(1.0, 0.2 * args.min_spacing / res)
+        pad2 = int(3 * sig2) + 1
+        p2 = ndimage.gaussian_filter1d(np.pad(p2, pad2), sigma=sig2)
         pk, props = find_peaks(
             p2,
             distance=max(1, int(args.min_spacing / res)),
             height=p2.max() * 0.05,
             prominence=p2.max() * 0.03,
         )
+        pk = pk - pad2
+        pk = pk[(pk >= 0) & (pk < len(e2) - 1)]
         pos = 0.5 * (e2[pk] + e2[pk + 1])
         for pi, pa in enumerate(pos):
             px = x0 + pa * ua[0] + rp * ub[0]
