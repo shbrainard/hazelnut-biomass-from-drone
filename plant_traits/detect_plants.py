@@ -62,14 +62,16 @@ def canopy_coords(chm, transform, min_height):
     return np.asarray(xs), np.asarray(ys), chm[rows, cols]
 
 
-def best_azimuth(x, y, bin_m, candidates):
+def best_azimuth(x, y, bin_m, candidates, w=None):
     """Azimuth (radians from east) whose across-row profile has the largest
     variance, which is what straight parallel rows produce."""
     best, best_var = None, -1.0
     for ang in candidates:
         across = -x * math.sin(ang) + y * math.cos(ang)
         hist, _ = np.histogram(
-            across, bins=int((across.max() - across.min()) / bin_m) + 1
+            across,
+            bins=int((across.max() - across.min()) / bin_m) + 1,
+            weights=w,
         )
         v = hist.var()
         if v > best_var:
@@ -77,10 +79,12 @@ def best_azimuth(x, y, bin_m, candidates):
     return best
 
 
-def refine_azimuth(x, y, bin_m):
-    coarse = best_azimuth(x, y, bin_m, np.deg2rad(np.arange(0, 180, 1.0)))
+def refine_azimuth(x, y, bin_m, w=None):
+    coarse = best_azimuth(
+        x, y, bin_m, np.deg2rad(np.arange(0, 180, 1.0)), w=w
+    )
     fine = best_azimuth(
-        x, y, bin_m, coarse + np.deg2rad(np.arange(-1.0, 1.0001, 0.05))
+        x, y, bin_m, coarse + np.deg2rad(np.arange(-1.0, 1.0001, 0.05)), w=w
     )
     return fine
 
@@ -138,7 +142,7 @@ def main(argv=None):
     ang = (
         math.radians(args.azimuth)
         if args.azimuth is not None
-        else refine_azimuth(x, y, res)
+        else refine_azimuth(x, y, res, w=h)
     )
     LOG.info("row azimuth %.2f degrees from east", math.degrees(ang))
     ua = np.array([math.cos(ang), math.sin(ang)])  # along the row
@@ -147,9 +151,11 @@ def main(argv=None):
     along = (x - x0) * ua[0] + (y - y0) * ua[1]
     across = (x - x0) * ub[0] + (y - y0) * ub[1]
 
-    # row centerlines: peaks of the across-row canopy profile
+    # row centerlines: peaks of the across-row canopy profile, weighted by
+    # height so a row of plants outweighs a strip of low vegetation of the
+    # same width in the alley beside it
     edges = np.arange(across.min() - res, across.max() + 2 * res, res)
-    prof = np.histogram(across, bins=edges)[0].astype(float)
+    prof = np.histogram(across, bins=edges, weights=h)[0].astype(float)
     sigma = max(1.0, 0.15 * args.row_spacing / res)
     # pad with empty bins so a row at the edge of the canopy extent is an
     # interior peak after smoothing; find_peaks cannot return the first or
