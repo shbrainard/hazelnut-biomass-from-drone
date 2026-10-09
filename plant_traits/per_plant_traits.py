@@ -386,8 +386,19 @@ def join_segments(seeds, segments, treetops, args):
         if args.id_col == args.seg_id_col:
             # the seeds are the refined tree tops themselves
             return seeds[args.id_col]
-        tt = treetops[[args.id_col, args.seg_id_col]].copy()
+        id_col = args.id_col
+        if id_col not in treetops.columns and id_col[:10] in treetops:
+            # a shapefile truncates field names to ten characters
+            id_col = id_col[:10]
+        tt = treetops[[id_col, args.seg_id_col]].rename(
+            columns={id_col: args.id_col}
+        )
         tt[args.id_col] = tt[args.id_col].astype(str)
+        if tt[args.id_col].str.endswith(".0").any():
+            # a numeric id read back as float
+            tt[args.id_col] = tt[args.id_col].str.replace(
+                r"\.0$", "", regex=True
+            )
         key = seeds[args.id_col].astype(str)
         m = key.map(
             tt.drop_duplicates(args.id_col).set_index(args.id_col)[
