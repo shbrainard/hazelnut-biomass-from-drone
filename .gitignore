@@ -12,3 +12,4 @@ notebooks/density_exploration.ipynb
 /__pycache__
 /.vscode
 *.pyc
+/.repro/
