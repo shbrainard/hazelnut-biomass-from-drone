@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
-Per-plant canopy traits measured on the returns of a ground-classified
-point cloud, around known plant positions.
+Measure per-plant canopy traits around known plant positions.
+
+Use the returns of a ground-classified point cloud.
 
 The watershed pipeline measures each bush on an IDW-smoothed canopy height
 model and reports its maximum. On 1,683 hand-taped hazelnut bushes that
@@ -112,7 +113,7 @@ def read_seeds(path, xy_cols=None, crs=None):
 # geometry helpers
 # --------------------------------------------------------------------------
 def row_axes(seeds, row_col):
-    """Unit vectors along and across the rows.
+    """Return unit vectors along and across the rows.
 
     Each row's direction is the major axis of its seed points; the rows are
     averaged as axial data (angles doubled) so opposite orientations agree.
@@ -153,9 +154,10 @@ def cell_keys(x, y, cell):
 
 
 def cell_max_volume(x, y, hag, cell):
-    """Sum over occupied cells of the highest return in the cell, times the
-    cell area. A point-cloud analogue of integrating a max-Z CHM, with no
-    interpolation and no smoothing."""
+    """Sum the highest return per occupied cell times the cell area.
+
+    Integrate a max-Z CHM without interpolation or smoothing.
+    """
     if len(x) == 0:
         return 0.0, 0.0
     ix, iy = cell_keys(x, y, cell)
@@ -167,7 +169,7 @@ def cell_max_volume(x, y, hag, cell):
 
 
 def voxel_stats(x, y, hag, cell):
-    """Filled voxel volume and porosity (filled / bounding-box voxels)."""
+    """Return filled voxel volume and filled / bounding-box porosity."""
     if len(x) == 0:
         return np.nan, np.nan, 0
     ix, iy = cell_keys(x, y, cell)
@@ -182,8 +184,10 @@ def voxel_stats(x, y, hag, cell):
 
 
 def hull_volume(x, y, hag):
-    """Volume of the 3-D convex hull of the canopy returns and their ground
-    projections, so a flat crown with a gap underneath still has a base."""
+    """Return the hull volume of canopy returns and ground projections.
+
+    Ground projections give a flat crown with a gap underneath a base.
+    """
     if len(x) < 4:
         return np.nan
     pts = np.c_[np.r_[x, x], np.r_[y, y], np.r_[hag, np.zeros(len(x))]]
@@ -246,6 +250,7 @@ def shape_metrics(x, y, hag, along, across, cell):
 # per-plant measurement
 # --------------------------------------------------------------------------
 def percentile_block(hag, suffix):
+    """Return height percentiles, maximum, and count with suffixed keys."""
     p = np.percentile
     if len(hag) == 0:
         return {
@@ -380,8 +385,11 @@ def measure_segments(
 
 
 def join_segments(seeds, segments, treetops, args):
-    """Segment id per seed: through the refined tree tops on --id-col when
-    given, otherwise the polygon containing the seed (nearest within 1 m)."""
+    """Assign a segment identifier to each seed.
+
+    Join refined tree tops on --id-col when given; otherwise use the
+    containing polygon or nearest polygon within 1 m.
+    """
     if treetops is not None:
         if args.id_col == args.seg_id_col:
             # the seeds are the refined tree tops themselves
@@ -429,6 +437,7 @@ def join_segments(seeds, segments, treetops, args):
 
 # --------------------------------------------------------------------------
 def main(argv=None):
+    """Parse arguments and write per-plant traits."""
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

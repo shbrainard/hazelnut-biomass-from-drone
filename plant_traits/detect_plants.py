@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
-Find planting rows and individual plants in a canopy height model when no
-plant map exists.
+Find planting rows and plants when no plant map exists.
+
+Use a canopy height model to locate rows and individual plants.
 
 The method assumes straight, parallel rows. It finds the row azimuth as the
 direction that makes the canopy's across-row profile sharpest, locates each
@@ -39,6 +40,7 @@ LOG = logging.getLogger("detect_plants")
 
 
 def load_chm(path, extent=None):
+    """Read canopy heights, optionally clipped to a polygon extent."""
     with rasterio.open(path) as src:
         if extent:
             gdf = gpd.read_file(extent)
@@ -57,14 +59,18 @@ def load_chm(path, extent=None):
 
 
 def canopy_coords(chm, transform, min_height):
+    """Return cell centers and heights above the canopy threshold."""
     rows, cols = np.where(np.isfinite(chm) & (chm > min_height))
     xs, ys = rasterio.transform.xy(transform, rows, cols, offset="center")
     return np.asarray(xs), np.asarray(ys), chm[rows, cols]
 
 
 def best_azimuth(x, y, bin_m, candidates, w=None):
-    """Azimuth (radians from east) whose across-row profile has the largest
-    variance, which is what straight parallel rows produce."""
+    """Return the azimuth with the greatest across-row profile variance.
+
+    Straight parallel rows maximize this variance; angles are radians
+    measured from east.
+    """
     best, best_var = None, -1.0
     for ang in candidates:
         across = -x * math.sin(ang) + y * math.cos(ang)
@@ -80,6 +86,7 @@ def best_azimuth(x, y, bin_m, candidates, w=None):
 
 
 def refine_azimuth(x, y, bin_m, w=None):
+    """Refine the strongest coarse row azimuth on a finer angular grid."""
     coarse = best_azimuth(
         x, y, bin_m, np.deg2rad(np.arange(0, 180, 1.0)), w=w
     )
@@ -90,6 +97,7 @@ def refine_azimuth(x, y, bin_m, w=None):
 
 
 def main(argv=None):
+    """Parse arguments and write detected rows and plant points."""
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
